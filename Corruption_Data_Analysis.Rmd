@@ -1,0 +1,134 @@
+---
+title: "Corruption Regression"
+output:
+  html_document:
+    df_print: paged
+---
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+library(haven)
+library(dplyr)
+#install.packages("stargazer")
+library(stargazer)
+#install.packages("readxl")
+library(readxl)
+```
+
+```{r}
+getwd()
+```
+```{r}
+"C:\\Users\\chris\\OneDrive\\Documents\\ECO 4421\\Regression_Project\\corruption_index_clean_data.xlsx"
+```
+```{r}
+corruption_data <- read_excel("corruption_index_clean_data.xlsx")
+head(corruption_data)
+```
+```{r}
+glimpse(corruption_data)
+```
+Off the bat, from the scatterplot, we can see a clear cluster of countries that have a high corruption index tend to have citizens with income below ~10,000.
+```{r}
+plot(corruption_data$annual_income_per_10k, corruption_data$corruption_index, pch=19, xlab = "Annual Income", ylab = "Corruption Index", main = "Scatterplot of Corruption Index and Income")
+```
+```{r}
+plot(corruption_data$cost_index, corruption_data$corruption_index, pch=19, xlab = "Cost Index", ylab = "Corruption Index", main = "Scatterplot of Corruption Index and Cost Index")
+```
+
+Scatterplot analyzing corruption index and tourist count seems to reveal no discernable and clear relationship between the two, though it does reveal an outlier in tourist count with relatively low corruption index, France. Nonetheless, it should still be included in our final regression as a control variable to potentially account for other factors correlated with annual income and determinants of corruption index (eg. perceived safety, political stability, crime rates).
+```{r}
+plot(corruption_index ~ tourism_count_as_percentage_of_population,
+     data = corruption_data,
+     main = "Scatterplot of Corruption Index and Tourist Count",
+     xlab = "Tourist Count as Percentage of Population",
+     ylab = "Corruption Index")
+```
+Regressing only annual income on the corruption index (isolated variable)
+```{r}
+singular_regression_full <- lm(corruption_index ~ annual_income_per_10k, data = corruption_data)
+summary(singular_regression_full)
+```
+Regression Model with only one coefficient (summary shown above):
+```{r}
+plot(corruption_data$annual_income_per_10k, corruption_data$corruption_index, pch=19, xlab = "Annual Income(per 10k)", ylab = "Corruption Index")
+abline(singular_regression_full, col = "red", lwd = 3)
+title("Regression with only Annual Income")
+text(7.2, 38, "United States", col = "red")
+```
+Note that when excluding income over 80K, regression line becomes slightly steeper, since 3 countries with high average annual income and low corruption index were slightly skewing the regression line, namely Switzerland, Norway, and Luxembourg (ordered from most annual income to least).
+```{r}
+corruption_data_excluding_income_over_80k <- filter(corruption_data, annual_income <= 80000)
+singular_regression_excluding_income_over_80k <- lm (corruption_index ~ annual_income_per_10k, data = corruption_data_excluding_income_over_80k)
+plot(corruption_data_excluding_income_over_80k$annual_income_per_10k, corruption_data_excluding_income_over_80k$corruption_index, pch=19, xlab = "Annual Income(per 10k)", ylab = "Corruption Index")
+abline(singular_regression_excluding_income_over_80k, col = "red", lwd = 4)
+title("Regression Excluding Income over $80k")
+```
+ Filter data to remove empty rows where we're missing information to include further regressors.
+```{r}
+corruption_data_adjusted_for_missing_data <- filter(corruption_data, !is.na(tourists_in_millions) & !is.na(cost_index))
+number_of_rows_in_new_dataset <- nrow(corruption_data_adjusted_for_missing_data)
+print(number_of_rows_in_new_dataset)
+```
+Running single regression with adjusted and reduced sample size (only 28 observations). Note how regression line becomes even steeper, mainly due to higher variability (not necessarily due to holding a stronger relationship)
+```{r}
+single_regression_adjusted_for_missing_data <- lm (corruption_index ~ annual_income_per_10k, data = corruption_data_adjusted_for_missing_data)
+plot(corruption_data_adjusted_for_missing_data$annual_income_per_10k, corruption_data_adjusted_for_missing_data$corruption_index, pch=19, xlab = "Annual Income", ylab = "Corruption Index")
+abline(single_regression_adjusted_for_missing_data, col = "red", lwd = 3)
+title("Regression with Annual Income (Reduced Sample Size)")
+```
+Adding one more coefficient to the regression: cost index (the higher cost index, the more expensive products and services are in that country relative to the US). This filtered data and comparison does not take tourist count into account, as it would significantly limit our available data set, from 110 observations all the way to 28.
+```{r}
+corruption_data_without_cost_index_missing_data <- filter (corruption_data, !is.na(cost_index))
+regr_w_one_regressor_excluding_tourism <- lm(corruption_index ~annual_income_per_10k, data = corruption_data_without_cost_index_missing_data)
+regr_w_two_regressors_excluding_tourism <- lm(corruption_index ~ annual_income_per_10k + cost_index, data = corruption_data_without_cost_index_missing_data)
+
+summary(regr_w_one_regressor_excluding_tourism)
+```
+
+Note how there was only a very small change in R^2 when comparing the one regression model with the two regression model.
+```{r}
+summary(regr_w_two_regressors_excluding_tourism)
+```
+```{r}
+plot(corruption_data_without_cost_index_missing_data$annual_income_per_10k, corruption_data_without_cost_index_missing_data$corruption_index, pch=19, xlab = "Annual Income", ylab = "Corruption Index")
+abline(regr_w_two_regressors_excluding_tourism, col = "red", lwd = 3)
+title("Regression Line Adjusted for Cost Index")
+```
+Tourists (in millions) may not be statistically significant when running full regression. Recommend to remove it as a regressor and replace with another if more data were to become available on quantifying factors such as "political stability" or "safety" that is in alignment with data. Below is the regression with all 3 variables included.
+
+```{r}
+multi_regr3 <- lm(corruption_index ~ annual_income_per_10k + tourism_count_as_percentage_of_population + cost_index, data = corruption_data_adjusted_for_missing_data)
+summary(multi_regr3)
+```
+Comparing only the 28 observations for all 3 coefficients with model 1 (just the annual income) and model 2 (with all 3 regressors)
+```{r}
+library(texreg)
+screenreg(list(single_regression_adjusted_for_missing_data, multi_regr3))
+```
+Heteroskedastic F stat shown below for 3 regressors
+```{r}
+linearHypothesis(multi_regr3, c("annual_income_per_10k=0", "tourism_count_as_percentage_of_population=0", "cost_index=0"), white.adjust = "hc1")
+```
+Heteroskedastic F stat for two regressor model 
+```{r}
+linearHypothesis(regr_w_two_regressors_excluding_tourism, c("annual_income_per_10k=0", "cost_index=0"), white.adjust = "hc1")
+```
+
+Comparing 71 observations with model 1 (with one regressor) and model 2 (with annual income and cost index as the regressors)- since tourism might not be statistically significant. This could potentially be the best model (due to the high sample size- and it also omits limited tourism data (which isn't even statistically significant per the p value). It's regression line adjusted for cost index is shown above.
+```{r}
+screenreg(list(regr_w_one_regressor_excluding_tourism, regr_w_two_regressors_excluding_tourism))
+```
+Below shows primary model adjusted with only 2 regressors, considering only 
+```{r}
+regr_w_two_regressors_adjusted <- lm(corruption_index ~ annual_income_per_10k + cost_index, data = corruption_data_adjusted_for_missing_data)
+
+screenreg(list(single_regression_adjusted_for_missing_data, regr_w_two_regressors_adjusted))
+
+```
+Conclusion
+In this analysis, we explored the relationship between corruption and several economic indicators. The results indicate that while income and cost of living are significant predictors of corruption, tourism does not appear to have a statistically significant impact. Future research could benefit from including additional variables such as political stability and safety measures.
